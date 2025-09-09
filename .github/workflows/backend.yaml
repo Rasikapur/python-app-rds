@@ -1,71 +1,69 @@
-name: Flask App CI
+name: Deploy Python App with Docker on EC2 via ECR
 
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  workflow_dispatch:   # ✅ allows manual trigger from Actions tab
+#  workflow_dispatch:   ## allows manual trigger from Actions tab
 
 jobs:
-  build-test:
+  deploy:
     runs-on: ubuntu-latest
 
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: rootpassword
-          MYSQL_DATABASE: mydatabase
-          MYSQL_USER: testuser
-          MYSQL_PASSWORD: testpassword
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h localhost -uroot -prootpassword"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-
     steps:
+      # 1. Checkout repo
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      # 2. Configure AWS credentials
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          python-version: "3.11"
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-south-1
 
-      - name: Install system dependencies
-        run: sudo apt-get update && sudo apt-get install -y default-libmysqlclient-dev gcc pkg-config
+      # 3. Log in to Amazon ECR
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Install dependencies
+      # 4. Build, tag, and push Docker image
+      - name: Build, Tag, and Push image to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: simple-python
+          IMAGE_TAG: latest
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-      - name: Wait for MySQL
+      # 5. Deploy on EC2
+      - name: Deploy to EC2
         run: |
-          echo "Waiting for MySQL to be ready..."
-          for i in {1..20}; do
-            if mysql -h 127.0.0.1 -P 3306 -uroot -prootpassword -e "SELECT 1;" > /dev/null 2>&1; then
-              echo "MySQL is up!"
-              break
-            fi
-            sleep 5
-          done
+          # Save SSH key properly
+          echo "$EC2_SSH_KEY" | tr -d '\r' | sed 's/\\n/\n/g' > rasi.key.pem
+          chmod 600 rasi.key.pem
 
-      - name: Set environment variables
-        run: |
-          echo "SECRET_KEY=supersecret" >> $GITHUB_ENV
-          echo "DB_HOST=127.0.0.1" >> $GITHUB_ENV
-          echo "DB_USER=testuser" >> $GITHUB_ENV
-          echo "DB_PASSWORD=testpassword" >> $GITHUB_ENV
-          echo "DB_NAME=mydatabase" >> $GITHUB_ENV
+          # Connect to EC2 and deploy
+          ssh -i rasi.key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
+            aws ecr get-login-password --region $AWS_REGION \
+              | docker login --username AWS --password-stdin $ECR_REGISTRY
 
-      - name: Run tests (Flask starts & DB connection)
-        run: |
-          python -m flask --version
-          python app.py &
-          sleep 10
-          curl http://127.0.0.1:5000/register || exit 1
+            docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+            docker rm -f my-python-app || true
+            docker run -d --name my-python-app -p 80:5000 \
+              $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          EOF
+        shell: bash
+        env:
+          AWS_DEFAULT_REGION: ap-south-1
+          AWS_REGION: ap-south-1
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          ECR_REGISTRY: 889971544446.dkr.ecr.ap-south-1.amazonaws.com
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+          IMAGE_TAG: latest
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          EC2_USER: ec2-user   # change to ubuntu if using Ubuntu AMI
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+

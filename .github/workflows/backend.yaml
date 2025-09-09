@@ -3,7 +3,7 @@ name: Deploy Python App with Docker on EC2 via ECR
 on:
   push:
     branches: [ "main" ]
-#  workflow_dispatch:   ## allows manual trigger from Actions tab
+  # workflow_dispatch:   ## allows manual trigger from Actions tab
 
 jobs:
   deploy:
@@ -51,7 +51,12 @@ jobs:
 
             docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
             docker rm -f my-python-app || true
+
             docker run -d --name my-python-app -p 80:5000 \
+              -e DB_HOST=$DB_HOST \
+              -e DB_USER=$DB_USER \
+              -e DB_PASSWORD=$DB_PASSWORD \
+              -e DB_NAME=$DB_NAME \
               $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           EOF
         shell: bash
@@ -66,4 +71,7 @@ jobs:
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
           EC2_USER: ec2-user   # change to ubuntu if using Ubuntu AMI
           EC2_HOST: ${{ secrets.EC2_HOST }}
-
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_NAME: ${{ secrets.DB_NAME }}

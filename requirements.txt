@@ -1,2 +1,3 @@
-- name: Install dependencies
-  run: pip install -r backend/requirements.txt
+Flask
+flask-mysqldb
+python-dotenv

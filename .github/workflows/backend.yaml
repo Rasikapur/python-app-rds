@@ -68,7 +68,7 @@ jobs:
             sudo docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
             # Stop old container if running
-            sudo docker rm -f my-python-app || true
+            # sudo docker rm -f my-python-app || true
 
             # Run new container
             sudo docker run -d --name my-python-app -p 80:5000 \

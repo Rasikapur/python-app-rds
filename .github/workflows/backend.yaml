@@ -3,7 +3,7 @@ name: Deploy Python App with Docker on EC2 via ECR
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch:   ## allows manual trigger from Actions tab
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -20,58 +20,45 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      # 3. Log in to Amazon ECR
-      - name: Log in to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      # 4. Build, tag, and push Docker image
-      - name: Build, Tag, and Push image to ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: backend-rds
-          IMAGE_TAG: latest
+      # 3. Save SSH key
+      - name: Save SSH key
         run: |
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-
-      # 5. Deploy on EC2
-      - name: Deploy to EC2
-        run: |
-          # Save SSH key properly
-          echo "$EC2_SSH_KEY" | tr -d '\r' | sed 's/\\n/\n/g' > rasi.key.pem
+          echo "${{ secrets.EC2_SSH_KEY }}" | tr -d '\r' | sed 's/\\n/\n/g' > rasi.key.pem
           chmod 400 rasi.key.pem
 
-          # Connect to EC2 and deploy
-          ssh -i rasi.key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
-            aws ecr get-login-password --region $AWS_REGION \
-              | docker login --username AWS --password-stdin $ECR_REGISTRY
+      # 4. Deploy to EC2
+      - name: Deploy to EC2
+        run: |
+          ssh -i rasi.key.pem -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+            set -e
 
-            docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+            # Export environment variables for use inside EC2
+            export AWS_REGION=${{ secrets.AWS_REGION }}
+            export ECR_REGISTRY=${{ secrets.ECR_REGISTRY }}
+            export ECR_REPOSITORY=${{ secrets.ECR_REPOSITORY }}
+            export IMAGE_TAG=latest
+            export DB_HOST=${{ secrets.DB_HOST }}
+            export DB_USER=${{ secrets.DB_USER }}
+            export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            export DB_NAME=${{ secrets.DB_NAME }}
+
+            # Authenticate with ECR
+            aws ecr get-login-password --region \$AWS_REGION \
+              | docker login --username AWS --password-stdin \$ECR_REGISTRY
+
+            # Pull latest image
+            docker pull \$ECR_REGISTRY/\$ECR_REPOSITORY:\$IMAGE_TAG
+
+            # Stop old container if running
             docker rm -f my-python-app || true
 
+            # Run new container
             docker run -d --name my-python-app -p 80:5000 \
-              -e DB_HOST=$DB_HOST \
-              -e DB_USER=$DB_USER \
-              -e DB_PASSWORD=$DB_PASSWORD \
-              -e DB_NAME=$DB_NAME \
-              $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+              -e DB_HOST=\$DB_HOST \
+              -e DB_USER=\$DB_USER \
+              -e DB_PASSWORD=\$DB_PASSWORD \
+              -e DB_NAME=\$DB_NAME \
+              \$ECR_REGISTRY/\$ECR_REPOSITORY:\$IMAGE_TAG
           EOF
-        shell: bash
-        env:
-          AWS_DEFAULT_REGION: us-east-1
-          AWS_REGION: us-east-1
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }} 
-          ECR_REGISTRY: 889971544446.dkr.ecr.us-east-1.amazonaws.com
-          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: latest
-          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-          EC2_USER: ubuntu  # change to ubuntu if using Ubuntu AMI
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          DB_NAME: ${{ secrets.DB_NAME }}

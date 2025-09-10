@@ -65,7 +65,7 @@ jobs:
           AWS_REGION: us-east-1
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          ECR_REGISTRY: 889971544446.dkr.ecr.ap-south-1.amazonaws.com
+          ECR_REGISTRY: 889971544446.dkr.ecr.us-east-1.amazonaws.com
           ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
           IMAGE_TAG: latest
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}

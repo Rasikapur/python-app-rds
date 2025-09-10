@@ -1,9 +1,10 @@
-name: Deploy Python App with Docker on EC2 via ECR
+name: Deploy Python App to EC2 via ECR
 
 on:
   push:
-    branches: [ "main" ]
-  workflow_dispatch:   ## allows manual trigger from Actions tab
+    branches:
+      - main   # Trigger when pushing to main branch
+  workflow_dispatch: # Allow manual trigger
 
 jobs:
   deploy:
@@ -20,56 +21,63 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      # 3. Log in to Amazon ECR
-      - name: Log in to Amazon ECR
+      # 3. Login to Amazon ECR
+      - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       # 4. Build, tag, and push Docker image
-      - name: Build, Tag, and Push image to ECR
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: backend-rds
-          IMAGE_TAG: latest
+      - name: Build, tag, and push image
         run: |
+          IMAGE_TAG=latest
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
 
-      # 5. Deploy on EC2
-      - name: Deploy to EC2
+      # 5. Save SSH key for EC2
+      - name: Save SSH key
         run: |
-          # Save SSH key properly
-          echo "$EC2_SSH_KEY" | tr -d '\r' | sed 's/\\n/\n/g' > rasi.pem
+          echo "${{ secrets.EC2_SSH_KEY }}" | tr -d '\r' | sed 's/\\n/\n/g' > rasi.pem
           chmod 600 rasi.pem
 
-          # Connect to EC2 and deploy
-          ssh -i rasi.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
+      # 6. Deploy to EC2
+      - name: Deploy to EC2
+        run: |
+          ssh -i rasi.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << EOF
+            # Install AWS CLI if missing
+            if ! command -v aws &> /dev/null; then
+              sudo apt update -y
+              sudo apt install -y awscli
+            fi
+
+            # Authenticate with ECR
             aws ecr get-login-password --region $AWS_REGION \
-              | docker login --username AWS --password-stdin $ECR_REGISTRY
+              | sudo docker login --username AWS --password-stdin $ECR_REGISTRY
 
-            docker pull $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-            docker rm -f my-python-app || true
+            # Pull latest image
+            echo "Pulling image: $ECR_REGISTRY/$ECR_REPOSITORY:latest"
+            sudo docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
-            docker run -d --name my-python-app -p 80:5000 \
+            # Stop old container if running
+            sudo docker rm -f my-python-app || true
+
+            # Run new container
+            sudo docker run -d --name my-python-app -p 80:5000 \
               -e DB_HOST=$DB_HOST \
               -e DB_USER=$DB_USER \
               -e DB_PASSWORD=$DB_PASSWORD \
               -e DB_NAME=$DB_NAME \
-              889971544446.dkr.ecr.us-east-1.amazonaws.com/my-repo:latest
+              $ECR_REGISTRY/$ECR_REPOSITORY:latest
           EOF
-        shell: bash
         env:
-          AWS_DEFAULT_REGION: us-east-1
-          AWS_REGION: us-east-1
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          ECR_REGISTRY: 889971544446.dkr.ecr.us-east-1.amazonaws.com
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
-          IMAGE_TAG: latest
-          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-          EC2_USER: ubuntu  # change to ubuntu if using Ubuntu AMI
+          EC2_USER: ${{ secrets.EC2_USER }}
           EC2_HOST: ${{ secrets.EC2_HOST }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_USER: ${{ secrets.DB_USER }}

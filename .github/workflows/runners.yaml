@@ -26,5 +26,5 @@ jobs:
           EOF
         env:
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-          EC2_USER: ec2-user # or ubuntu
+          EC2_USER: ubuntu # or ubuntu
           EC2_HOST: ${{ secrets.EC2_HOST }}

@@ -57,7 +57,7 @@ jobs:
               -e DB_USER=$DB_USER \
               -e DB_PASSWORD=$DB_PASSWORD \
               -e DB_NAME=$DB_NAME \
-              $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+              889971544446.dkr.ecr.us-east-1.amazonaws.com/my-repo:latest
           EOF
         shell: bash
         env:
@@ -75,4 +75,3 @@ jobs:
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_NAME: ${{ secrets.DB_NAME }}
-  

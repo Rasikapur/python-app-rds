@@ -8,7 +8,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: custom-runner
 
     steps:
       # 1. Checkout repo

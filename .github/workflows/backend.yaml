@@ -67,10 +67,10 @@ jobs:
             sudo docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
             # Stop old container if running
-           # sudo docker rm -f my-python-app || true
+            sudo docker rm -f my-python-app || true
 
             # Run new container
-            sudo docker run -d --name my-python-app -p 80:5000 \
+            sudo docker run -d --name my-python-app -p 5000:5000 \
               -e DB_HOST=$DB_HOST \
               -e DB_USER=$DB_USER \
               -e DB_PASSWORD=$DB_PASSWORD \

@@ -42,7 +42,7 @@ jobs:
         run: |
           # Save SSH key properly
           echo "$EC2_SSH_KEY" | tr -d '\r' | sed 's/\\n/\n/g' > rasi.key.pem
-          chmod 600 rasi.key.pem
+          chmod 400 rasi.key.pem
 
           # Connect to EC2 and deploy
           ssh -i rasi.key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'

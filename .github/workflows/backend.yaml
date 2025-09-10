@@ -44,10 +44,9 @@ jobs:
           echo "${{ secrets.EC2_SSH_KEY }}" | tr -d '\r' | sed 's/\\n/\n/g' > rasi.pem
           chmod 600 rasi.pem
 
-      # 6. Deploy to EC2
       - name: Deploy to EC2
         run: |
-          ssh -i rasi.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
+          ssh -i rasi.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << EOF
             # Export AWS credentials inside EC2
             export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
             export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
@@ -68,7 +67,7 @@ jobs:
             sudo docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
 
             # Stop old container if running
-            # sudo docker rm -f my-python-app || true
+           # sudo docker rm -f my-python-app || true
 
             # Run new container
             sudo docker run -d --name my-python-app -p 80:5000 \
@@ -78,6 +77,7 @@ jobs:
               -e DB_NAME=$DB_NAME \
               $ECR_REGISTRY/$ECR_REPOSITORY:latest
           EOF
+
         env:
           AWS_REGION: ${{ secrets.AWS_REGION }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}

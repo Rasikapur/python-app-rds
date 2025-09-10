@@ -3,7 +3,7 @@ name: Deploy Python App with Docker on EC2 via ECR
 on:
   push:
     branches: [ "main" ]
-  # workflow_dispatch:   ## allows manual trigger from Actions tab
+  workflow_dispatch:   ## allows manual trigger from Actions tab
 
 jobs:
   deploy:
@@ -20,7 +20,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-south-1
+          aws-region: us-east-1
 
       # 3. Log in to Amazon ECR
       - name: Log in to Amazon ECR
@@ -31,7 +31,7 @@ jobs:
       - name: Build, Tag, and Push image to ECR
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: simple-python
+          ECR_REPOSITORY: backend-rds
           IMAGE_TAG: latest
         run: |
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
@@ -41,11 +41,11 @@ jobs:
       - name: Deploy to EC2
         run: |
           # Save SSH key properly
-          echo "$EC2_SSH_KEY" | tr -d '\r' | sed 's/\\n/\n/g' > rasi.key.pem
-          chmod 600 rasi.key.pem
+          echo "$EC2_SSH_KEY" | tr -d '\r' | sed 's/\\n/\n/g' > rasi.pem
+          chmod 600 rasi.pem
 
           # Connect to EC2 and deploy
-          ssh -i rasi.key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
+          ssh -i rasi.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
             aws ecr get-login-password --region $AWS_REGION \
               | docker login --username AWS --password-stdin $ECR_REGISTRY
 
@@ -61,17 +61,18 @@ jobs:
           EOF
         shell: bash
         env:
-          AWS_DEFAULT_REGION: ap-south-1
-          AWS_REGION: ap-south-1
+          AWS_DEFAULT_REGION: us-east-1
+          AWS_REGION: us-east-1
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          ECR_REGISTRY: 889971544446.dkr.ecr.ap-south-1.amazonaws.com
+          ECR_REGISTRY: 889971544446.dkr.ecr.us-east-1.amazonaws.com
           ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
           IMAGE_TAG: latest
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-          EC2_USER: ec2-user   # change to ubuntu if using Ubuntu AMI
+          EC2_USER: ubuntu  # change to ubuntu if using Ubuntu AMI
           EC2_HOST: ${{ secrets.EC2_HOST }}
           DB_HOST: ${{ secrets.DB_HOST }}
           DB_USER: ${{ secrets.DB_USER }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_NAME: ${{ secrets.DB_NAME }}
+  

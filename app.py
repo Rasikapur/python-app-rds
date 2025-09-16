@@ -27,7 +27,7 @@ def register():
         account = cur.fetchone()
         if account:
             msg = 'Account already exists!'
-        elif not username or not password or not emamkdir actions-runner && cd actions-runneril:
+        elif not username or not password or not email:
             msg = 'Please fill out the form!'
         else:
             cur.execute('INSERT INTO users (username, password, email) VALUES (%s, %s, %s)', (username, password, email))
